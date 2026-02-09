@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Trash2, Sun, Moon, AlertCircle, RotateCcw, Download } from 'lucide-react';
+import { ArrowLeft, FileText, Trash2, Sun, Moon, AlertCircle, RotateCcw, Download, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useDownloadManager } from '@/contexts/DownloadContext';
@@ -15,6 +15,18 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
 }
 
+function formatSpeed(bytesPerSec: number): string {
+  if (bytesPerSec === 0) return '';
+  return `${formatBytes(bytesPerSec)}/s`;
+}
+
+function formatEta(seconds: number): string {
+  if (seconds <= 0) return '';
+  if (seconds < 60) return `~${Math.ceil(seconds)}s`;
+  if (seconds < 3600) return `~${Math.ceil(seconds / 60)}m`;
+  return `~${(seconds / 3600).toFixed(1)}h`;
+}
+
 function formatFilename(title: string, year: number | null, resolution: string | null) {
   const y = year || 'XXXX';
   const r = resolution || 'HD';
@@ -25,7 +37,7 @@ export default function Downloads() {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { theme, setTheme } = useTheme();
-  const { downloads, removeDownload, clearDownloads, startDownload } = useDownloadManager();
+  const { downloads, removeDownload, clearDownloads, startDownload, cancelDownload } = useDownloadManager();
 
   return (
     <div className="min-h-screen bg-background mobile-nav-spacing">
@@ -82,7 +94,11 @@ export default function Downloads() {
               <div className="flex items-start gap-3">
                 {/* File icon */}
                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <FileText className="w-5 h-5 text-primary" />
+                  {dl.status === 'downloading' ? (
+                    <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                  ) : (
+                    <FileText className="w-5 h-5 text-primary" />
+                  )}
                 </div>
 
                 {/* Info */}
@@ -93,33 +109,61 @@ export default function Downloads() {
 
                   {/* Size info */}
                   <p className="text-xs text-muted-foreground mt-1">
-                    {dl.totalBytes > 0
-                      ? formatBytes(dl.totalBytes)
-                      : dl.fileSize || 'Waiting...'}
+                    {dl.status === 'downloading' && dl.totalBytes > 0
+                      ? `${formatBytes(dl.downloadedBytes)} / ${formatBytes(dl.totalBytes)}`
+                      : dl.status === 'downloading'
+                        ? dl.downloadedBytes > 0
+                          ? formatBytes(dl.downloadedBytes)
+                          : 'Starting...'
+                        : dl.totalBytes > 0
+                          ? formatBytes(dl.totalBytes)
+                          : dl.fileSize || ''}
                   </p>
 
-                  {/* Progress bar - hidden since we can't track browser downloads */}
+                  {/* Progress bar */}
                   {dl.status === 'downloading' && (
-                    <Progress value={50} className="h-1.5 mt-2 animate-pulse" />
+                    <Progress
+                      value={dl.totalBytes > 0 ? dl.progress : undefined}
+                      className={`h-1.5 mt-2 ${dl.totalBytes === 0 ? 'animate-pulse' : ''}`}
+                    />
                   )}
 
-                  {/* Status row */}
-                  <div className="flex items-center justify-between mt-1.5">
+                  {/* Status row with speed & ETA */}
+                  <div className="flex items-center justify-between mt-1.5 gap-2">
                     <span className="text-xs text-muted-foreground">
                       {dl.status === 'downloading'
-                        ? 'Starting download...'
+                        ? dl.totalBytes > 0
+                          ? `Downloading... ${dl.progress}%`
+                          : 'Downloading...'
                         : dl.status === 'complete'
-                          ? 'Sent to browser - check your downloads'
-                          : dl.status === 'error'
-                            ? 'Error'
-                            : ''}
+                          ? 'Download complete'
+                          : dl.status === 'cancelled'
+                            ? 'Cancelled'
+                            : dl.status === 'error'
+                              ? 'Error'
+                              : ''}
                     </span>
+                    {dl.status === 'downloading' && (dl.speed > 0 || dl.eta > 0) && (
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {formatSpeed(dl.speed)}
+                        {dl.eta > 0 && ` • ${formatEta(dl.eta)}`}
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                {/* Action button */}
+                {/* Action buttons */}
                 <div className="flex flex-col gap-1 flex-shrink-0">
-                  {dl.status === 'error' && (
+                  {dl.status === 'downloading' && (
+                    <button
+                      onClick={() => cancelDownload(dl.id)}
+                      className="w-9 h-9 rounded-full bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 transition-colors"
+                      title="Cancel"
+                    >
+                      <X className="w-4 h-4 text-destructive" />
+                    </button>
+                  )}
+                  {(dl.status === 'error' || dl.status === 'cancelled') && (
                     <button
                       onClick={() => startDownload({
                         movieId: dl.movieId,
@@ -130,28 +174,21 @@ export default function Downloads() {
                         fileSize: dl.fileSize,
                         url: dl.url,
                       })}
-                      className="w-9 h-9 rounded-full bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 transition-colors"
+                      className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors"
                       title="Retry"
                     >
-                      <RotateCcw className="w-4 h-4 text-destructive" />
+                      <RotateCcw className="w-4 h-4 text-primary" />
                     </button>
                   )}
-                  {dl.status === 'complete' && (
+                  {dl.status !== 'downloading' && (
                     <button
-                      onClick={() => window.open(dl.url, '_blank')}
-                      className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors"
-                      title="Download again"
+                      onClick={() => removeDownload(dl.id)}
+                      className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-destructive/10 transition-colors"
+                      title="Remove"
                     >
-                      <Download className="w-4 h-4 text-primary" />
+                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
                     </button>
                   )}
-                  <button
-                    onClick={() => removeDownload(dl.id)}
-                    className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-destructive/10 transition-colors"
-                    title="Remove"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </button>
                 </div>
               </div>
 
