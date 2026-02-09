@@ -42,7 +42,9 @@ export function ServerDrawer({
   const navigate = useNavigate();
 
   const handleOpen = (url: string, useInAppPlayer: boolean = false) => {
-    // In-app download with progress tracking
+    onOpenChange(false);
+    
+    // Download mode - trigger native browser download
     if (type === 'download' && movieInfo) {
       startDownload({
         movieId: movieInfo.movieId,
@@ -53,14 +55,16 @@ export function ServerDrawer({
         fileSize: movieInfo.fileSize,
         url,
       });
-      navigate('/downloads');
+      // Note: startDownload will redirect to the download URL
+      // No need to navigate - browser handles the download
     } else if (useInAppPlayer && type === 'play') {
+      // Play mode with in-app redirect
       const title = movieInfo?.title || 'Video';
       navigate(`/watch?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
     } else {
+      // External link (Telegram, MEGA, etc.)
       window.open(url, '_blank', 'noopener,noreferrer');
     }
-    onOpenChange(false);
   };
 
   const servers = type === 'download'
