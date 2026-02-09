@@ -24,43 +24,53 @@ serve(async (req) => {
       });
     }
 
-    // Use redirect: 'manual' to capture redirect without following or downloading body
-    // This avoids compute limits since we only read headers
+    // Step 1: Follow redirects manually using HEAD requests (fast, no body)
     let finalUrl = targetUrl;
     let currentUrl = targetUrl;
     const maxRedirects = 10;
 
     for (let i = 0; i < maxRedirects; i++) {
       console.log(`[download-proxy] Checking redirect (${i + 1}):`, currentUrl);
-      
-      const response = await fetch(currentUrl, {
-        method: "GET",
-        redirect: "manual",
-      });
 
-      // If it's a redirect, follow it manually
+      // Use HEAD first to avoid downloading the body
+      const timeoutSignal = AbortSignal.timeout(8000);
+      let response: Response;
+      try {
+        response = await fetch(currentUrl, {
+          method: "HEAD",
+          redirect: "manual",
+          signal: timeoutSignal,
+        });
+      } catch {
+        // Some servers reject HEAD or timeout, try GET with manual redirect
+        console.log("[download-proxy] HEAD failed, trying GET with manual redirect");
+        const getSignal = AbortSignal.timeout(8000);
+        response = await fetch(currentUrl, {
+          method: "GET",
+          redirect: "manual",
+          signal: getSignal,
+        });
+        // Immediately discard the body
+        await response.body?.cancel();
+      }
+
+      // If it's a redirect, follow it
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("Location");
         if (!location) {
           console.log("[download-proxy] Redirect without Location header");
           break;
         }
-        // Consume/discard the body to free resources
         await response.body?.cancel();
-        
-        // Handle relative redirects
         currentUrl = location.startsWith("http") ? location : new URL(location, currentUrl).href;
         finalUrl = currentUrl;
         console.log("[download-proxy] Redirected to:", finalUrl);
         continue;
       }
 
-      // Not a redirect - this is the final URL
-      // Get content info from headers before discarding body
+      // Not a redirect — grab headers
       const contentLength = response.headers.get("Content-Length");
       const contentType = response.headers.get("Content-Type");
-      
-      // Discard body immediately to avoid compute limits
       await response.body?.cancel();
 
       console.log("[download-proxy] Final URL:", finalUrl);
@@ -76,21 +86,38 @@ serve(async (req) => {
       });
     }
 
-    // If we exhausted redirects, return what we have
+    // Exhausted redirects
     console.log("[download-proxy] Max redirects reached, using:", finalUrl);
-    return new Response(JSON.stringify({
-      resolvedUrl: finalUrl,
-      contentLength: null,
-      contentType: "application/octet-stream",
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+
+    // Do a final HEAD to get content info
+    try {
+      const headRes = await fetch(finalUrl, { method: "HEAD" });
+      const contentLength = headRes.headers.get("Content-Length");
+      const contentType = headRes.headers.get("Content-Type");
+      await headRes.body?.cancel();
+
+      return new Response(JSON.stringify({
+        resolvedUrl: finalUrl,
+        contentLength: contentLength ? parseInt(contentLength, 10) : null,
+        contentType: contentType || "application/octet-stream",
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch {
+      return new Response(JSON.stringify({
+        resolvedUrl: finalUrl,
+        contentLength: null,
+        contentType: "application/octet-stream",
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : String(error);
-    const errStack = error instanceof Error ? error.stack : '';
-    console.error("[download-proxy] Error:", errMsg, errStack);
+    console.error("[download-proxy] Error:", errMsg);
     return new Response(JSON.stringify({ error: errMsg || "Proxy fetch failed" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
