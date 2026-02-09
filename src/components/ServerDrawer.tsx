@@ -45,8 +45,11 @@ export function ServerDrawer({
     if (useInAppPlayer && type === 'play') {
       const title = movieInfo?.title || 'Video';
       navigate(`/watch?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
+    } else if (type === 'download') {
+      // For downloads, navigate directly to trigger native browser download
+      window.location.href = url;
     } else {
-      // Use anchor element to avoid popup blocker
+      // For external links (play mode fallback), use anchor element
       const a = document.createElement('a');
       a.href = url;
       a.target = '_blank';
