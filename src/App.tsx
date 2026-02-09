@@ -7,7 +7,7 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/useAuth";
 import { FilterProvider } from "@/contexts/FilterContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
-import { DownloadProvider } from "@/contexts/DownloadContext";
+
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DevicePresenceMonitor } from "@/components/DevicePresenceMonitor";
 import { useNetworkRefresh } from "@/hooks/useNetworkRefresh";
@@ -24,7 +24,7 @@ import TvChannels from "./pages/TvChannels";
 import Browse from "./pages/Browse";
 import SearchPage from "./pages/Search";
 import Welcome from "./pages/Welcome";
-import Downloads from "./pages/Downloads";
+
 import Watch from "./pages/Watch";
 import Support from "./pages/Support";
 import AdminLayout from "./pages/admin/AdminLayout";
@@ -70,7 +70,6 @@ const App = () => (
       <LanguageProvider>
         <AuthProvider>
           <FilterProvider>
-            <DownloadProvider>
             <NetworkRefreshMonitor />
             <DevicePresenceMonitor />
             <TooltipProvider>
@@ -84,7 +83,7 @@ const App = () => (
                   <Route path="/browse/:filter" element={<Browse />} />
                   <Route path="/search" element={<SearchPage />} />
                   <Route path="/welcome" element={<ProtectedRoute><Welcome /></ProtectedRoute>} />
-                  <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
+                  
                   <Route path="/watch" element={<Watch />} />
                   <Route path="/support" element={<Support />} />
                   <Route path="/ask-ai" element={<Support />} />
@@ -112,7 +111,7 @@ const App = () => (
                 </Routes>
               </BrowserRouter>
             </TooltipProvider>
-            </DownloadProvider>
+            
           </FilterProvider>
         </AuthProvider>
       </LanguageProvider>

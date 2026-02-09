@@ -6,7 +6,6 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useDownloadManager } from '@/contexts/DownloadContext';
 import { useNavigate } from 'react-router-dom';
 
 interface ServerDrawerProps {
@@ -38,44 +37,27 @@ export function ServerDrawer({
   movieInfo,
 }: ServerDrawerProps) {
   const { t } = useLanguage();
-  const { startDownload } = useDownloadManager();
   const navigate = useNavigate();
 
   const handleOpen = (url: string, useInAppPlayer: boolean = false) => {
     onOpenChange(false);
     
-    // Download mode - trigger native browser download
-    if (type === 'download' && movieInfo) {
-      startDownload({
-        movieId: movieInfo.movieId,
-        title: movieInfo.title,
-        posterUrl: movieInfo.posterUrl,
-        year: movieInfo.year,
-        resolution: movieInfo.resolution,
-        fileSize: movieInfo.fileSize,
-        url,
-      });
-      // Note: startDownload will redirect to the download URL
-      // No need to navigate - browser handles the download
-    } else if (useInAppPlayer && type === 'play') {
-      // Play mode with in-app redirect
+    if (useInAppPlayer && type === 'play') {
       const title = movieInfo?.title || 'Video';
       navigate(`/watch?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
     } else {
-      // External link (Telegram, MEGA, etc.)
+      // For both download and external links, open directly in browser
       window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
 
   const servers = type === 'download'
     ? [
-        // In download mode: only show actual download sources, not the stream/watch page
         ...(downloadUrl ? [{ name: 'Main Server', url: downloadUrl, icon: 'download' as const, inApp: false }] : []),
         ...(telegramUrl ? [{ name: 'Telegram', url: telegramUrl, icon: 'telegram' as const, inApp: false }] : []),
         ...(megaUrl ? [{ name: 'MEGA', url: megaUrl, icon: 'mega' as const, inApp: false }] : []),
       ]
     : [
-        // In play mode: show streaming sources
         ...(streamUrl ? [{ name: 'Main Server', url: streamUrl, icon: 'main' as const, inApp: true }] : []),
         ...(downloadUrl ? [{ name: 'Direct Download', url: downloadUrl, icon: 'download' as const, inApp: false }] : []),
         ...(telegramUrl ? [{ name: 'Telegram', url: telegramUrl, icon: 'telegram' as const, inApp: false }] : []),
@@ -85,7 +67,6 @@ export function ServerDrawer({
   if (servers.length === 0) return null;
 
   const title = type === 'play' ? t('chooseServer') : t('chooseDownloader');
-  const ActionIcon = type === 'play' ? Play : Download;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
