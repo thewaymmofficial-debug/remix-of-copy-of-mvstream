@@ -1,1 +1,4 @@
 project_id = "icnfjixjohbxjxqbnnac"
+
+[functions.download-proxy]
+verify_jwt = false

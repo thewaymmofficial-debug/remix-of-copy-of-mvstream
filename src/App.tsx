@@ -7,6 +7,7 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/hooks/useAuth";
 import { FilterProvider } from "@/contexts/FilterContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { DownloadProvider } from "@/contexts/DownloadContext";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DevicePresenceMonitor } from "@/components/DevicePresenceMonitor";
@@ -26,6 +27,7 @@ import SearchPage from "./pages/Search";
 import Welcome from "./pages/Welcome";
 
 import Watch from "./pages/Watch";
+import Downloads from "./pages/Downloads";
 import Support from "./pages/Support";
 import AdminLayout from "./pages/admin/AdminLayout";
 import Dashboard from "./pages/admin/Dashboard";
@@ -70,6 +72,7 @@ const App = () => (
       <LanguageProvider>
         <AuthProvider>
           <FilterProvider>
+            <DownloadProvider>
             <NetworkRefreshMonitor />
             <DevicePresenceMonitor />
             <TooltipProvider>
@@ -85,6 +88,7 @@ const App = () => (
                   <Route path="/welcome" element={<ProtectedRoute><Welcome /></ProtectedRoute>} />
                   
                   <Route path="/watch" element={<Watch />} />
+                  <Route path="/downloads" element={<Downloads />} />
                   <Route path="/support" element={<Support />} />
                   <Route path="/ask-ai" element={<Support />} />
                   <Route path="/actor/:id" element={<ActorDetail />} />
@@ -111,7 +115,7 @@ const App = () => (
                 </Routes>
               </BrowserRouter>
             </TooltipProvider>
-            
+            </DownloadProvider>
           </FilterProvider>
         </AuthProvider>
       </LanguageProvider>
