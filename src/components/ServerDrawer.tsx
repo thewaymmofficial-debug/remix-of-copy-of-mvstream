@@ -8,6 +8,7 @@ import {
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useDownloadManager } from '@/contexts/DownloadContext';
 
 interface ServerDrawerProps {
   open: boolean;
@@ -39,14 +40,26 @@ export function ServerDrawer({
 }: ServerDrawerProps) {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const { startDownload } = useDownloadManager();
 
-  const handleOpen = (url: string, useInAppPlayer: boolean = false) => {
+  const handleOpen = (url: string, useInAppPlayer: boolean = false, isMainServer: boolean = false) => {
     onOpenChange(false);
     
     if (useInAppPlayer && type === 'play') {
       const title = movieInfo?.title || 'Video';
       navigate(`/watch?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
+    } else if (type === 'download' && isMainServer && movieInfo) {
+      // In-app download with progress tracking
+      startDownload({
+        id: movieInfo.movieId,
+        title: movieInfo.title,
+        url,
+        posterUrl: movieInfo.posterUrl,
+      });
+      toast.success('Download started', { description: 'Track progress in Downloads page.' });
+      navigate('/downloads');
     } else if (type === 'download') {
+      // External download links (Telegram, MEGA) open in new tab
       window.open(url, '_blank', 'noopener,noreferrer');
     } else {
       // External links open in new tab
@@ -62,14 +75,14 @@ export function ServerDrawer({
 
   const servers = type === 'download'
     ? [
-        ...(downloadUrl ? [{ name: 'Main Server', url: downloadUrl, icon: 'download' as const, inApp: false }] : []),
-        ...(telegramUrl ? [{ name: 'Telegram', url: telegramUrl, icon: 'telegram' as const, inApp: false }] : []),
-        ...(megaUrl ? [{ name: 'MEGA', url: megaUrl, icon: 'mega' as const, inApp: false }] : []),
+        ...(downloadUrl ? [{ name: 'Main Server', url: downloadUrl, icon: 'download' as const, inApp: false, isMainServer: true }] : []),
+        ...(telegramUrl ? [{ name: 'Telegram', url: telegramUrl, icon: 'telegram' as const, inApp: false, isMainServer: false }] : []),
+        ...(megaUrl ? [{ name: 'MEGA', url: megaUrl, icon: 'mega' as const, inApp: false, isMainServer: false }] : []),
       ]
     : [
-        ...(streamUrl ? [{ name: 'Main Server', url: streamUrl, icon: 'main' as const, inApp: true }] : []),
-        ...(telegramUrl ? [{ name: 'Telegram', url: telegramUrl, icon: 'telegram' as const, inApp: false }] : []),
-        ...(megaUrl ? [{ name: 'MEGA', url: megaUrl, icon: 'mega' as const, inApp: false }] : []),
+        ...(streamUrl ? [{ name: 'Main Server', url: streamUrl, icon: 'main' as const, inApp: true, isMainServer: false }] : []),
+        ...(telegramUrl ? [{ name: 'Telegram', url: telegramUrl, icon: 'telegram' as const, inApp: false, isMainServer: false }] : []),
+        ...(megaUrl ? [{ name: 'MEGA', url: megaUrl, icon: 'mega' as const, inApp: false, isMainServer: false }] : []),
       ];
 
   if (servers.length === 0) return null;
@@ -88,7 +101,7 @@ export function ServerDrawer({
           {servers.map((server) => (
             <button
               key={server.name}
-              onClick={() => handleOpen(server.url, server.inApp)}
+              onClick={() => handleOpen(server.url, server.inApp, server.isMainServer)}
               className="w-full flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:bg-muted/50 transition-colors"
             >
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">

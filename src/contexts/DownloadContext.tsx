@@ -32,7 +32,6 @@ export function useDownloadManager() {
   return ctx;
 }
 
-const PROXY_URL = 'https://icnfjixjohbxjxqbnnac.supabase.co/functions/v1/download-proxy';
 
 export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const [downloads, setDownloads] = useState<DownloadItem[]>([]);
@@ -49,24 +48,19 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     downloadMetaRef.current.set(item.id, { startTime: Date.now(), startBytes: resumeFrom });
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImljbmZqaXhqb2hieGp4cWJubmFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMTYyNjMsImV4cCI6MjA4NTg5MjI2M30.aiU8qAgb1wicSC17EneEs4qAlLtFZbYeyMnhi4NHI7Y',
-      };
+      const headers: Record<string, string> = {};
       if (resumeFrom > 0) {
         headers['Range'] = `bytes=${resumeFrom}-`;
       }
 
-      const resp = await fetch(PROXY_URL, {
-        method: 'POST',
+      const resp = await fetch(item.url, {
+        method: 'GET',
         headers,
-        body: JSON.stringify({ url: item.url }),
         signal: controller.signal,
       });
 
       if (!resp.ok && resp.status !== 206) {
-        const errText = await resp.text();
-        throw new Error(`Proxy error ${resp.status}: ${errText}`);
+        throw new Error(`Download error ${resp.status}`);
       }
 
       const contentLength = parseInt(resp.headers.get('content-length') || '0', 10);
