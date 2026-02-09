@@ -117,25 +117,17 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (proxyErr) {
         console.warn('[DownloadManager] Proxy failed, using original URL:', proxyErr);
-        // Continue with original URL
       }
 
       if (totalBytes > 0) {
         updateEntry(id, { totalBytes });
       }
 
-      // Step 2: Attempt direct fetch to the resolved URL
-      let response: Response;
-      let usedFallback = false;
-
-      try {
-        response = await fetch(resolvedUrl, { signal: controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      } catch (fetchErr: unknown) {
-        // CORS or network error — fall back to window.open
-        if (controller.signal.aborted) throw fetchErr;
-
-        usedFallback = true;
+      // Step 2: Check if URL is HTTP (mixed content) — must use native browser download
+      const isHttpUrl = resolvedUrl.startsWith('http://');
+      
+      if (isHttpUrl) {
+        // HTTP URLs can't be fetched from HTTPS app — use native browser download
         window.open(resolvedUrl, '_blank', 'noopener,noreferrer');
 
         updateEntry(id, {
@@ -154,9 +146,30 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (usedFallback) return;
+      // Step 3: Try direct fetch for HTTPS URLs
+      let response: Response;
+      try {
+        response = await fetch(resolvedUrl, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      } catch (fetchErr: unknown) {
+        if (controller.signal.aborted) throw fetchErr;
+        // CORS or other error — fallback to browser download
+        window.open(resolvedUrl, '_blank', 'noopener,noreferrer');
+        updateEntry(id, {
+          status: 'complete',
+          progress: 100,
+          downloadedBytes: totalBytes,
+          error: undefined,
+        });
+        toast.success('Download started', {
+          description: 'Opened in browser — check your downloads folder.',
+          duration: 4000,
+        });
+        abortControllers.current.delete(id);
+        return;
+      }
 
-      // Step 3: Stream the response body and track progress
+      // Step 4: Stream the response body and track progress
       const reader = response.body?.getReader();
       if (!reader) {
         throw new Error('ReadableStream not supported');
