@@ -14,6 +14,23 @@ serve(async (req) => {
   }
 
   try {
+    // GET ?url= → 302 redirect (used by download buttons to bypass mixed-content)
+    if (req.method === "GET") {
+      const reqUrl = new URL(req.url);
+      const target = reqUrl.searchParams.get("url");
+      if (target) {
+        console.log(`[download-proxy] Redirecting to: ${target}`);
+        return new Response(null, {
+          status: 302,
+          headers: { ...corsHeaders, Location: target },
+        });
+      }
+      return new Response("Missing url parameter", {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "text/plain" },
+      });
+    }
+
     const { url } = await req.json();
     if (!url || typeof url !== "string") {
       return new Response(JSON.stringify({ error: "Missing url" }), {
