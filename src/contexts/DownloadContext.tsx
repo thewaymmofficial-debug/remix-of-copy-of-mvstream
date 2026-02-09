@@ -137,17 +137,23 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         updateEntry(id, { totalBytes });
       }
 
-      // Step 2: Determine fetch URL
-      // For HTTP URLs, stream through our HTTPS proxy to avoid mixed-content blocking
-      const isHttpUrl = resolvedUrl.startsWith('http://');
-      const fetchUrl = isHttpUrl
-        ? `${PROXY_BASE}?mode=stream&url=${encodeURIComponent(resolvedUrl)}`
-        : resolvedUrl;
-
-      const fetchHeaders: Record<string, string> = {};
-      if (isHttpUrl) {
-        fetchHeaders['apikey'] = ANON_KEY;
+      // For HTTP URLs, skip streaming entirely — the proxy can't handle large files
+      // and browsers block mixed-content fetch(). Use native download instead.
+      if (resolvedUrl.startsWith('http://')) {
+        triggerNativeDownload(resolvedUrl, filename);
+        updateEntry(id, {
+          status: 'complete', progress: 100,
+          downloadedBytes: totalBytes, totalBytes,
+          speed: 0, eta: 0,
+        });
+        abortControllers.current.delete(id);
+        return;
       }
+
+      // Step 2: Determine fetch URL (HTTPS only from here)
+      // Only HTTPS URLs reach here — fetch directly
+      const fetchUrl = resolvedUrl;
+      const fetchHeaders: Record<string, string> = {};
 
       let response: Response;
       try {
