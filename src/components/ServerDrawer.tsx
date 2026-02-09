@@ -47,13 +47,7 @@ export function ServerDrawer({
       const title = movieInfo?.title || 'Video';
       navigate(`/watch?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
     } else if (type === 'download') {
-      // Route through HTTPS redirect proxy to avoid mixed-content blocking
-      const isHttp = url.startsWith('http://');
-      const finalUrl = isHttp
-        ? `https://icnfjixjohbxjxqbnnac.supabase.co/functions/v1/download-proxy?url=${encodeURIComponent(url)}`
-        : url;
-      toast.success('Download started', { description: 'Your browser will handle the download.' });
-      window.open(finalUrl, '_blank', 'noopener,noreferrer');
+      window.open(url, '_blank', 'noopener,noreferrer');
     } else {
       // External links open in new tab
       const a = document.createElement('a');
