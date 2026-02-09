@@ -88,24 +88,25 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     }
   }, [updateEntry]);
 
+  const PROXY_BASE = 'https://icnfjixjohbxjxqbnnac.supabase.co/functions/v1/download-proxy';
+  const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImljbmZqaXhqb2hieGp4cWJubmFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMTYyNjMsImV4cCI6MjA4NTg5MjI2M30.aiU8qAgb1wicSC17EneEs4qAlLtFZbYeyMnhi4NHI7Y';
+
   const performDownload = useCallback(async (id: string, url: string, filename: string) => {
     const controller = new AbortController();
     abortControllers.current.set(id, controller);
 
     try {
-      // Step 1: Resolve redirects and get content info via edge function
+      // Step 1: Resolve redirects and get content info
       let resolvedUrl = url;
       let totalBytes = 0;
 
       try {
-        const proxyUrl = `https://icnfjixjohbxjxqbnnac.supabase.co/functions/v1/download-proxy?url=${encodeURIComponent(url)}`;
+        const proxyUrl = `${PROXY_BASE}?url=${encodeURIComponent(url)}`;
         const timeoutController = new AbortController();
         const timeout = setTimeout(() => timeoutController.abort(), 15000);
 
         const proxyRes = await fetch(proxyUrl, {
-          headers: {
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImljbmZqaXhqb2hieGp4cWJubmFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMTYyNjMsImV4cCI6MjA4NTg5MjI2M30.aiU8qAgb1wicSC17EneEs4qAlLtFZbYeyMnhi4NHI7Y',
-          },
+          headers: { 'apikey': ANON_KEY },
           signal: timeoutController.signal,
         });
         clearTimeout(timeout);
@@ -116,64 +117,45 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
           totalBytes = proxyData.contentLength || 0;
         }
       } catch (proxyErr) {
-        console.warn('[DownloadManager] Proxy failed, using original URL:', proxyErr);
+        console.warn('[DownloadManager] Resolve failed, using original URL:', proxyErr);
       }
 
       if (totalBytes > 0) {
         updateEntry(id, { totalBytes });
       }
 
-      // Step 2: Check if URL is HTTP (mixed content) — must use native browser download
+      // Step 2: Determine fetch URL
+      // For HTTP URLs, stream through our HTTPS proxy to avoid mixed-content blocking
       const isHttpUrl = resolvedUrl.startsWith('http://');
-      
+      const fetchUrl = isHttpUrl
+        ? `${PROXY_BASE}?mode=stream&url=${encodeURIComponent(resolvedUrl)}`
+        : resolvedUrl;
+
+      const fetchHeaders: Record<string, string> = {};
       if (isHttpUrl) {
-        // HTTP URLs can't be fetched from HTTPS app — use native browser download
-        window.open(resolvedUrl, '_blank', 'noopener,noreferrer');
-
-        updateEntry(id, {
-          status: 'complete',
-          progress: 100,
-          downloadedBytes: totalBytes,
-          error: undefined,
-        });
-
-        toast.success('Download started', {
-          description: 'Opened in browser — check your downloads folder.',
-          duration: 4000,
-        });
-
-        abortControllers.current.delete(id);
-        return;
+        fetchHeaders['apikey'] = ANON_KEY;
       }
 
-      // Step 3: Try direct fetch for HTTPS URLs
       let response: Response;
       try {
-        response = await fetch(resolvedUrl, { signal: controller.signal });
+        response = await fetch(fetchUrl, {
+          signal: controller.signal,
+          headers: fetchHeaders,
+        });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
       } catch (fetchErr: unknown) {
         if (controller.signal.aborted) throw fetchErr;
-        // CORS or other error — fallback to browser download
+        // Last resort fallback
         window.open(resolvedUrl, '_blank', 'noopener,noreferrer');
-        updateEntry(id, {
-          status: 'complete',
-          progress: 100,
-          downloadedBytes: totalBytes,
-          error: undefined,
-        });
-        toast.success('Download started', {
-          description: 'Opened in browser — check your downloads folder.',
-          duration: 4000,
-        });
+        updateEntry(id, { status: 'complete', progress: 100, downloadedBytes: totalBytes });
+        toast.success('Download started', { description: 'Opened in browser — check your downloads folder.', duration: 4000 });
         abortControllers.current.delete(id);
         return;
       }
 
-      // Step 4: Stream the response body and track progress
+      // Step 3: Stream body with progress
       const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('ReadableStream not supported');
-      }
+      if (!reader) throw new Error('ReadableStream not supported');
 
       const actualTotal = parseInt(response.headers.get('Content-Length') || '0', 10) || totalBytes;
       if (actualTotal > 0) {
@@ -206,59 +188,36 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         }
 
         const progress = actualTotal > 0 ? Math.round((loaded / actualTotal) * 100) : 0;
-
-        throttledUpdate(id, {
-          downloadedBytes: loaded,
-          progress,
-          speed,
-          eta,
-        });
+        throttledUpdate(id, { downloadedBytes: loaded, progress, speed, eta });
       }
 
-      // Step 4: Create blob and trigger save
+      // Step 4: Save file locally
       const blob = new Blob(chunks);
       const objectUrl = URL.createObjectURL(blob);
-
       const a = document.createElement('a');
       a.href = objectUrl;
       a.download = filename;
       a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
-
-      // Cleanup
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(objectUrl);
-      }, 1000);
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(objectUrl); }, 1000);
 
       updateEntry(id, {
-        status: 'complete',
-        progress: 100,
-        downloadedBytes: loaded,
-        totalBytes: actualTotal || loaded,
-        speed: 0,
-        eta: 0,
+        status: 'complete', progress: 100,
+        downloadedBytes: loaded, totalBytes: actualTotal || loaded,
+        speed: 0, eta: 0,
       });
 
-      toast.success('Download complete', {
-        description: filename,
-        duration: 4000,
-      });
+      toast.success('Download complete', { description: filename, duration: 4000 });
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         updateEntry(id, { status: 'cancelled', speed: 0, eta: 0 });
         return;
       }
-
       const message = err instanceof Error ? err.message : 'Download failed';
       console.error('[DownloadManager] Error:', message);
       updateEntry(id, { status: 'error', error: message, speed: 0, eta: 0 });
-
-      toast.error('Download failed', {
-        description: message,
-        duration: 5000,
-      });
+      toast.error('Download failed', { description: message, duration: 5000 });
     } finally {
       abortControllers.current.delete(id);
       throttleTimers.current.delete(id);
