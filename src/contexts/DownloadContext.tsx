@@ -94,21 +94,31 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
     try {
       // Step 1: Resolve redirects and get content info via edge function
-      const proxyUrl = `https://icnfjixjohbxjxqbnnac.supabase.co/functions/v1/download-proxy?url=${encodeURIComponent(url)}`;
-      const proxyRes = await fetch(proxyUrl, {
-        headers: {
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImljbmZqaXhqb2hieGp4cWJubmFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMTYyNjMsImV4cCI6MjA4NTg5MjI2M30.aiU8qAgb1wicSC17EneEs4qAlLtFZbYeyMnhi4NHI7Y',
-        },
-        signal: controller.signal,
-      });
+      let resolvedUrl = url;
+      let totalBytes = 0;
 
-      if (!proxyRes.ok) {
-        throw new Error(`Proxy error: ${proxyRes.status}`);
+      try {
+        const proxyUrl = `https://icnfjixjohbxjxqbnnac.supabase.co/functions/v1/download-proxy?url=${encodeURIComponent(url)}`;
+        const timeoutController = new AbortController();
+        const timeout = setTimeout(() => timeoutController.abort(), 15000);
+
+        const proxyRes = await fetch(proxyUrl, {
+          headers: {
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImljbmZqaXhqb2hieGp4cWJubmFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMTYyNjMsImV4cCI6MjA4NTg5MjI2M30.aiU8qAgb1wicSC17EneEs4qAlLtFZbYeyMnhi4NHI7Y',
+          },
+          signal: timeoutController.signal,
+        });
+        clearTimeout(timeout);
+
+        if (proxyRes.ok) {
+          const proxyData = await proxyRes.json();
+          resolvedUrl = proxyData.resolvedUrl || url;
+          totalBytes = proxyData.contentLength || 0;
+        }
+      } catch (proxyErr) {
+        console.warn('[DownloadManager] Proxy failed, using original URL:', proxyErr);
+        // Continue with original URL
       }
-
-      const proxyData = await proxyRes.json();
-      const resolvedUrl: string = proxyData.resolvedUrl;
-      const totalBytes: number = proxyData.contentLength || 0;
 
       if (totalBytes > 0) {
         updateEntry(id, { totalBytes });
