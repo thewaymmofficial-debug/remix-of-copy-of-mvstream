@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { toast } from 'sonner';
 
 export interface DownloadEntry {
   id: string;
@@ -94,9 +95,12 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     setDownloads(prev => [newEntry, ...prev]);
 
     // Navigate directly to the download URL
-    // This triggers the browser's native download manager
-    // The server sends Content-Disposition: attachment header which forces download
     window.location.href = info.url;
+
+    toast.success('Download started', {
+      description: 'Check your browser\'s download manager for progress.',
+      duration: 4000,
+    });
 
     // Mark as "sent to browser" - we can't track actual browser download progress
     // This is a browser security limitation
