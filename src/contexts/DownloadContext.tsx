@@ -59,6 +59,19 @@ function saveToStorage(downloads: DownloadEntry[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(downloads));
 }
 
+function triggerNativeDownload(url: string, filename: string) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => document.body.removeChild(a), 1000);
+  toast.success('Download started', { description: 'Check your browser downloads.', duration: 4000 });
+}
+
 function makeFilename(title: string, year: number | null, resolution: string | null) {
   const y = year || 'XXXX';
   const r = resolution || 'HD';
@@ -145,10 +158,8 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
       } catch (fetchErr: unknown) {
         if (controller.signal.aborted) throw fetchErr;
-        // Last resort fallback
-        window.open(resolvedUrl, '_blank', 'noopener,noreferrer');
+        triggerNativeDownload(resolvedUrl, filename);
         updateEntry(id, { status: 'complete', progress: 100, downloadedBytes: totalBytes });
-        toast.success('Download started', { description: 'Opened in browser — check your downloads folder.', duration: 4000 });
         abortControllers.current.delete(id);
         return;
       }
@@ -214,10 +225,11 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         updateEntry(id, { status: 'cancelled', speed: 0, eta: 0 });
         return;
       }
-      const message = err instanceof Error ? err.message : 'Download failed';
-      console.error('[DownloadManager] Error:', message);
-      updateEntry(id, { status: 'error', error: message, speed: 0, eta: 0 });
-      toast.error('Download failed', { description: message, duration: 5000 });
+      // If streaming failed (e.g. edge function timeout for large files),
+      // fall back to native browser download
+      console.warn('[DownloadManager] Stream failed, falling back to native download:', err);
+      triggerNativeDownload(url, filename);
+      updateEntry(id, { status: 'complete', progress: 100, speed: 0, eta: 0 });
     } finally {
       abortControllers.current.delete(id);
       throttleTimers.current.delete(id);
