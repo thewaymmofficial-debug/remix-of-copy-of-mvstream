@@ -1,4 +1,4 @@
-import { Server, ChevronRight, Play, ExternalLink, Download } from 'lucide-react';
+import { Server, ChevronRight, Download } from 'lucide-react';
 import {
   Drawer,
   DrawerContent,
@@ -47,15 +47,13 @@ export function ServerDrawer({
       const title = movieInfo?.title || 'Video';
       navigate(`/watch?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
     } else if (type === 'download') {
-      // Open in new tab — keeps app intact, browser handles download natively
-      toast.success('Download started', { description: 'Opening in a new tab. Your browser will handle the download.' });
-      const a = document.createElement('a');
-      a.href = url;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      // Route through HTTPS redirect proxy to avoid mixed-content blocking
+      const isHttp = url.startsWith('http://');
+      const finalUrl = isHttp
+        ? `https://icnfjixjohbxjxqbnnac.supabase.co/functions/v1/download-redirect?url=${encodeURIComponent(url)}`
+        : url;
+      toast.success('Download started', { description: 'Your browser will handle the download.' });
+      window.open(finalUrl, '_blank', 'noopener,noreferrer');
     } else {
       // External links open in new tab
       const a = document.createElement('a');
