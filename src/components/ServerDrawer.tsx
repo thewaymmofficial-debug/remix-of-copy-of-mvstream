@@ -47,9 +47,15 @@ export function ServerDrawer({
       const title = movieInfo?.title || 'Video';
       navigate(`/watch?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
     } else if (type === 'download') {
-      // Direct browser download — bypasses CORS, uses native download manager
-      toast.success('Download started', { description: 'Check your browser downloads.' });
-      window.location.href = url;
+      // Open in new tab — keeps app intact, browser handles download natively
+      toast.success('Download started', { description: 'Opening in a new tab. Your browser will handle the download.' });
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     } else {
       // External links open in new tab
       const a = document.createElement('a');
