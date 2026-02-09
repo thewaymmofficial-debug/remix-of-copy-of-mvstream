@@ -7,6 +7,8 @@ import {
 } from '@/components/ui/drawer';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useNavigate } from 'react-router-dom';
+import { useDownloadManager } from '@/contexts/DownloadContext';
+import { toast } from 'sonner';
 
 interface ServerDrawerProps {
   open: boolean;
@@ -38,18 +40,23 @@ export function ServerDrawer({
 }: ServerDrawerProps) {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const { startDownload } = useDownloadManager();
 
-  const handleOpen = (url: string, useInAppPlayer: boolean = false) => {
+  const handleOpen = (url: string, useInAppPlayer: boolean = false, useProxy: boolean = false) => {
     onOpenChange(false);
     
     if (useInAppPlayer && type === 'play') {
       const title = movieInfo?.title || 'Video';
       navigate(`/watch?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
-    } else if (type === 'download') {
-      // For downloads, navigate directly to trigger native browser download
-      window.location.href = url;
+    } else if (useProxy && type === 'download') {
+      // In-app download via proxy with progress tracking
+      const id = movieInfo?.movieId || url;
+      const title = movieInfo?.title || 'Download';
+      startDownload({ id, title, url, posterUrl: movieInfo?.posterUrl || null });
+      toast.success('Download started', { description: 'Check the Downloads page for progress.' });
+      navigate('/downloads');
     } else {
-      // For external links (play mode fallback), use anchor element
+      // External links (Telegram, MEGA) open in new tab
       const a = document.createElement('a');
       a.href = url;
       a.target = '_blank';
@@ -60,17 +67,17 @@ export function ServerDrawer({
     }
   };
 
+  // In download mode: only show download_url as Main Server, not stream_url
   const servers = type === 'download'
     ? [
-        ...(downloadUrl ? [{ name: 'Main Server', url: downloadUrl, icon: 'download' as const, inApp: false }] : []),
-        ...(telegramUrl ? [{ name: 'Telegram', url: telegramUrl, icon: 'telegram' as const, inApp: false }] : []),
-        ...(megaUrl ? [{ name: 'MEGA', url: megaUrl, icon: 'mega' as const, inApp: false }] : []),
+        ...(downloadUrl ? [{ name: 'Main Server', url: downloadUrl, icon: 'download' as const, inApp: false, proxy: true }] : []),
+        ...(telegramUrl ? [{ name: 'Telegram', url: telegramUrl, icon: 'telegram' as const, inApp: false, proxy: false }] : []),
+        ...(megaUrl ? [{ name: 'MEGA', url: megaUrl, icon: 'mega' as const, inApp: false, proxy: false }] : []),
       ]
     : [
-        ...(streamUrl ? [{ name: 'Main Server', url: streamUrl, icon: 'main' as const, inApp: true }] : []),
-        ...(downloadUrl ? [{ name: 'Direct Download', url: downloadUrl, icon: 'download' as const, inApp: false }] : []),
-        ...(telegramUrl ? [{ name: 'Telegram', url: telegramUrl, icon: 'telegram' as const, inApp: false }] : []),
-        ...(megaUrl ? [{ name: 'MEGA', url: megaUrl, icon: 'mega' as const, inApp: false }] : []),
+        ...(streamUrl ? [{ name: 'Main Server', url: streamUrl, icon: 'main' as const, inApp: true, proxy: false }] : []),
+        ...(telegramUrl ? [{ name: 'Telegram', url: telegramUrl, icon: 'telegram' as const, inApp: false, proxy: false }] : []),
+        ...(megaUrl ? [{ name: 'MEGA', url: megaUrl, icon: 'mega' as const, inApp: false, proxy: false }] : []),
       ];
 
   if (servers.length === 0) return null;
@@ -89,7 +96,7 @@ export function ServerDrawer({
           {servers.map((server) => (
             <button
               key={server.name}
-              onClick={() => handleOpen(server.url, server.inApp)}
+              onClick={() => handleOpen(server.url, server.inApp, server.proxy)}
               className="w-full flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:bg-muted/50 transition-colors"
             >
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -101,7 +108,7 @@ export function ServerDrawer({
               {type === 'play' ? (
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />
               ) : (
-                <ExternalLink className="w-5 h-5 text-muted-foreground" />
+                <Download className="w-5 h-5 text-muted-foreground" />
               )}
             </button>
           ))}
