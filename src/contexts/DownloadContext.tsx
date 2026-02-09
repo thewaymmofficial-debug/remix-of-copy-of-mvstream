@@ -93,24 +93,18 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
     setDownloads(prev => [newEntry, ...prev]);
 
-    // Trigger native browser download directly — no proxy needed
-    // Using <a> tag navigation bypasses CORS entirely (CORS only applies to fetch/XHR)
-    // The browser will handle any redirects natively
-    const a = document.createElement('a');
-    a.href = info.url;
-    a.download = `${info.title.replace(/\s+/g, '.')}.${info.year || 'XXXX'}.${info.resolution || 'HD'}.Web-Dl(cineverse).mkv`;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    // Navigate directly to the download URL
+    // This triggers the browser's native download manager
+    // The server sends Content-Disposition: attachment header which forces download
+    window.location.href = info.url;
 
-    // Mark as complete after a short delay (browser handles the actual download)
+    // Mark as "sent to browser" - we can't track actual browser download progress
+    // This is a browser security limitation
     setTimeout(() => {
       setDownloads(prev => prev.map(d =>
         d.id === id ? { ...d, status: 'complete' as const, progress: 100 } : d
       ));
-    }, 3000);
+    }, 1500);
   }, [downloads]);
 
   const removeDownload = useCallback((id: string) => {

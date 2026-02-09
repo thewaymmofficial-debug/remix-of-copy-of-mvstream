@@ -98,16 +98,18 @@ export default function Downloads() {
                       : dl.fileSize || 'Waiting...'}
                   </p>
 
-                  {/* Progress bar */}
-                  <Progress value={dl.status === 'complete' ? 100 : dl.progress} className="h-1.5 mt-2" />
+                  {/* Progress bar - hidden since we can't track browser downloads */}
+                  {dl.status === 'downloading' && (
+                    <Progress value={50} className="h-1.5 mt-2 animate-pulse" />
+                  )}
 
                   {/* Status row */}
                   <div className="flex items-center justify-between mt-1.5">
                     <span className="text-xs text-muted-foreground">
                       {dl.status === 'downloading'
-                        ? 'Downloading via browser...'
+                        ? 'Starting download...'
                         : dl.status === 'complete'
-                          ? 'Complete'
+                          ? 'Sent to browser - check your downloads'
                           : dl.status === 'error'
                             ? 'Error'
                             : ''}
