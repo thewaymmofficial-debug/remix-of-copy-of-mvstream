@@ -46,8 +46,14 @@ export function ServerDrawer({
       const title = movieInfo?.title || 'Video';
       navigate(`/watch?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
     } else {
-      // For both download and external links, open directly in browser
-      window.open(url, '_blank', 'noopener,noreferrer');
+      // Use anchor element to avoid popup blocker
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
   };
 
