@@ -94,8 +94,9 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
     setDownloads(prev => [newEntry, ...prev]);
 
-    // Navigate directly to the download URL
-    window.location.href = info.url;
+    // Open in new tab to trigger download without navigating away
+    // Cross-origin HTTP URLs can't use the download attribute, so we open directly
+    window.open(info.url, '_blank', 'noopener,noreferrer');
 
     toast.success('Download started', {
       description: 'Check your browser\'s download manager for progress.',
